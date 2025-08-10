@@ -13,6 +13,8 @@ LONG (NTAPI * NtResumeProcess)(HANDLE ProcessHandle)  = NULL;
 
 #define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
 
+QList<QString> RouterWin::kIpv6Subnets = { "fc00::/7", "2000::/4", "3000::/4" };
+
 RouterWin &RouterWin::Instance()
 {
     static RouterWin s;
@@ -447,47 +449,34 @@ bool RouterWin::restoreResolvers() {
     return m_dnsUtil->restoreResolvers();
 }
 
+QNetworkInterface RouterWin::findLoopbackIface()
+{
+    for (auto iface : QNetworkInterface::allInterfaces()) {
+        if (iface.flags() & QNetworkInterface::IsLoopBack) {
+            return iface;
+        }
+    }
+    return {};
+}
+
 void RouterWin::StopRoutingIpv6()
 {
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 add route fc00::/7 interface={NetworkInterface.IPv6LoopbackInterfaceIndex} metric=0 store=active");
-        p.start(command);
-        p.waitForFinished();
-    }
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 add route 2000::/4 interface={NetworkInterface.IPv6LoopbackInterfaceIndex} metric=0 store=active");
-        p.start(command);
-        p.waitForFinished();
-    }
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 add route 3000::/4 interface={NetworkInterface.IPv6LoopbackInterfaceIndex} metric=0 store=active");
-        p.start(command);
-        p.waitForFinished();
+    qDebug() << "RouterWin::StopRoutingIpv6";
+
+    if (auto loopback = findLoopbackIface(); loopback.isValid()) {
+        for (auto subnet : kIpv6Subnets) {
+            QProcess{}.execute("netsh", { "interface", "ipv6", "add", "route", subnet, QString("interface=%1").arg(loopback.index()), "metric=0", "store=active" });
+        }
     }
 }
 
 void RouterWin::StartRoutingIpv6()
 {
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 delete route fc00::/7 interface={NetworkInterface.IPv6LoopbackInterfaceIndex}");
-        p.start(command);
-        p.waitForFinished();
-    }
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 delete route 2000::/4 interface={NetworkInterface.IPv6LoopbackInterfaceIndex}");
-        p.start(command);
-        p.waitForFinished();
-    }
-    {
-        QProcess p;
-        QString command = QString("interface ipv6 delete route 3000::/4 interface={NetworkInterface.IPv6LoopbackInterfaceIndex}");
-        p.start(command);
-        p.waitForFinished();
+    qDebug() << "RouterWin::StartRoutingIpv6";
+
+    if (auto loopback = findLoopbackIface(); loopback.isValid()) {
+        for (auto subnet : kIpv6Subnets) {
+            QProcess{}.execute("netsh", { "interface", "ipv6", "delete", "route", subnet, QString("interface=%1").arg(loopback.index()) });
+        }
     }
 }
-
