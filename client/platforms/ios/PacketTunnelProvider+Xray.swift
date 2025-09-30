@@ -1,6 +1,5 @@
 import Foundation
 import NetworkExtension
-import WireGuardKitGo
 
 enum XrayErrors: Error {
     case noXrayConfig
@@ -108,9 +107,7 @@ extension PacketTunnelProvider {
                     return
                 }
 
-                if let strongSelf = self {
-                    strongSelf.updateActiveInterfaceIndex(for: strongSelf.defaultPath)
-                }
+                self?.updateActiveInterfaceIndexForCurrentPath()
 
                 // Launch xray
                 self?.setupAndStartXray(configData: updatedData) { xrayError in
@@ -137,14 +134,13 @@ extension PacketTunnelProvider {
         LibXrayStopXray()
         completionHandler()
     }
-    
+
     func sockCallback(fd: uintptr_t) {
         if activeIfaceIdx != 0 {
             withUnsafePointer(to: activeIfaceIdx) { ptr in
                 setsockopt(Int32(fd), IPPROTO_IP, IP_BOUND_IF, ptr, socklen_t(MemoryLayout<UInt32>.size))
                 setsockopt(Int32(fd), IPPROTO_IPV6, IPV6_BOUND_IF, ptr, socklen_t(MemoryLayout<UInt32>.size))
             }
-            
         }
     }
 
@@ -156,8 +152,8 @@ extension PacketTunnelProvider {
             completionHandler(XrayErrors.cantSaveXrayConfig)
             return
         }
-        
-        updateActiveInterfaceIndex(for: defaultPath)
+
+        updateActiveInterfaceIndexForCurrentPath()
 
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         let cb: libxray_sockcallback = { (fd, ctx) in
